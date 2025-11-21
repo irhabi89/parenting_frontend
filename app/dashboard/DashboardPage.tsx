@@ -4,7 +4,7 @@ import { useContext, useEffect, useState, useCallback, useMemo } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import { deviceService, locationService } from "../../services/apiService";
 import { useSocket } from "../../hooks/useSocket";
-
+import { Socket } from "socket.io-client";
 // Components
 import DeviceList from "../../components/parenting/DeviceList";
 import dynamic from "next/dynamic";
@@ -60,17 +60,44 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLog[]>([]);
 
+  // --- TAMBAHKAN STATE INI ---
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
+
   const socket = useSocket(
     process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5000"
   );
 
-  const addLog = useCallback((msg: string) => {
+  const addLog = useCallback((msg: string, type: string = "info") => {
+    const prefix = type === "error" ? "❌" : type === "warning" ? "⚠️" : "ℹ️";
     setConsoleLogs((prev) => [
       ...prev,
-      { time: new Date().toLocaleTimeString(), message: msg }
+      { time: new Date().toLocaleTimeString(), message: `${prefix} ${msg}` }
     ]);
   }, []);
 
+  const handleSwitchCamera = useCallback(async () => {
+    if (!selectedDevice || !socket?.current) {
+      addLog(
+        "Tidak dapat switch kamera, perangkat atau socket tidak ada",
+        "error"
+      );
+      return;
+    }
+
+    setIsSwitchingCamera(true);
+    addLog("Mengirim perintah switch camera...");
+
+    const command = {
+      deviceId: selectedDevice.id,
+      action: "switch-camera"
+    };
+
+    (socket.current as Socket).emit("command", command);
+
+    setTimeout(() => {
+      setIsSwitchingCamera(false);
+    }, 1000);
+  }, [selectedDevice, socket, addLog]);
   // -----------------------------
   // Fetch Device Location
   // -----------------------------
@@ -160,9 +187,19 @@ export default function DashboardPage() {
     if (activeView === VIEW_TYPES.CAMERA) {
       return (
         <div className="p-6 bg-gray-900 rounded-xl shadow-2xl">
-          <h2 className="text-2xl font-bold mb-4 text-white">
-            📹 Kamera – {selectedDevice.device_name}
-          </h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold text-white">
+              📹 Kamera – {selectedDevice.device_name}
+            </h2>
+            <button
+              onClick={handleSwitchCamera}
+              disabled={isSwitchingCamera}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors duration-200"
+            >
+              {isSwitchingCamera ? "Mengganti..." : "📷 Switch Camera"}
+            </button>
+          </div>
+
           <div className="aspect-video bg-black rounded-lg">
             <CameraView
               key={`cam-${selectedDevice.id}`}
@@ -184,7 +221,9 @@ export default function DashboardPage() {
     activeView,
     currentLocation,
     socket,
-    addLog
+    addLog,
+    isSwitchingCamera,
+    handleSwitchCamera
   ]);
 
   // -----------------------------

@@ -1,3 +1,5 @@
+// hooks/useWebRTC.js
+
 import { useEffect, useRef, useCallback } from "react";
 
 // Nama event socket
@@ -16,16 +18,19 @@ export function useWebRTC({ socket, deviceId, addLog }) {
   const pendingCandidatesRef = useRef([]);
   const remoteDescriptionSetRef = useRef(false);
   const initializedRef = useRef(false);
-
+  const cleanupRef = useRef(null);
   // --- Cleanup function ---
   const cleanup = useCallback(() => {
     addLog("🧹 Membersihkan sumber daya WebRTC...", "info");
 
     // Remove socket listeners
     if (socket.current) {
-      socket.current.off(SOCKET_EVENTS.DEVICE_FOUND);
-      socket.current.off(SOCKET_EVENTS.ANSWER);
-      socket.current.off(SOCKET_EVENTS.ICE_CANDIDATE);
+      // Gunakan ref untuk menghapus listener yang spesifik
+      const listenersToCleanup = cleanupRef.current || [];
+      listenersToCleanup.forEach(({ event, handler }) => {
+        socket.current.off(event, handler);
+      });
+      cleanupRef.current = [];
     }
 
     // Close PeerConnection
@@ -48,80 +53,9 @@ export function useWebRTC({ socket, deviceId, addLog }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, addLog]);
 
-  useEffect(() => {
-    if (!socket?.current || !deviceId) {
-      addLog("⚠️ Socket atau deviceId tidak tersedia. Menunggu...", "warning");
-      return;
-    }
-
-    // Prevent double initialization
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-    addLog("🔧 Menginisialisasi WebRTC di Parent...", "info");
-
-    // --- Setup RTCPeerConnection ---
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: "stun:192.168.1.254:3478" },
-        {
-          urls: "turn:192.168.1.254:3478",
-          username: "webrtc",
-          credential: "webrtc123"
-        }
-      ]
-    });
-    pcRef.current = pc;
-    addLog("✅ RTCPeerConnection dibuat", "info");
-
-    // --- Event Handlers ---
-    pc.ontrack = (event) => {
-      addLog("📡 onTrack event dipanggil", "info");
-      if (videoRef.current && event.streams[0]) {
-        videoRef.current.srcObject = event.streams[0];
-        addLog("📹 Video stream attached ke video element", "success");
-      }
-    };
-
-    // useWebRTC.js (Induk)
-    // ...
-    pc.onicecandidate = (event) => {
-      if (event.candidate && socket.current?.connected) {
-        addLog(`🧊 ICE candidate dibuat: ${event.candidate.candidate}`, "ice");
-
-        // --- PERBAIKAN: Bungkus candidate dalam objek ---
-        const payload = {
-          to: deviceId, // deviceId adalah "4"
-          candidate: {
-            candidate: event.candidate.candidate,
-            sdpMid: event.candidate.sdpMid,
-            sdpMLineIndex: event.candidate.sdpMLineIndex
-          }
-        };
-
-        socket.current.emit(SOCKET_EVENTS.ICE_CANDIDATE, payload);
-        addLog(`🧊 ICE candidate dikirim ke ${deviceId}`, "ice");
-      } else if (!event.candidate) {
-        addLog("🧊 ICE gathering selesai", "ice");
-      }
-    };
-    // ...
-
-    pc.oniceconnectionstatechange = () => {
-      console.log("ICE STATE CHANGED TO:", pc.iceConnectionState); // Tambah ini
-      addLog(`🔌 ICE connection state: ${pc.iceConnectionState}`, "info");
-      if (["connected", "completed"].includes(pc.iceConnectionState)) {
-        addLog("✅ Koneksi WebRTC berhasil!", "success");
-      } else if (
-        ["failed", "disconnected", "closed"].includes(pc.iceConnectionState)
-      ) {
-        addLog("❌ Koneksi WebRTC gagal atau terputus", "error");
-        isCallingRef.current = false;
-      }
-    };
-
-    // --- Socket Handlers ---
-    // --- Socket Handlers ---
-    const handleDeviceFound = async (data) => {
+  // --- Fungsi Handler (Dipindahkan ke luar useEffect untuk optimasi) ---
+  const handleDeviceFound = useCallback(
+    async (data) => {
       if (data.deviceId !== deviceId) return;
       if (isCallingRef.current) return;
 
@@ -129,11 +63,11 @@ export function useWebRTC({ socket, deviceId, addLog }) {
       addLog("📞 Memulai panggilan ke child device...", "info");
 
       try {
-        const offer = await pc.createOffer({
+        const offer = await pcRef.current.createOffer({
           offerToReceiveVideo: true,
           offerToReceiveAudio: true
         });
-        await pc.setLocalDescription(offer);
+        await pcRef.current.setLocalDescription(offer);
 
         socket.current.emit(SOCKET_EVENTS.OFFER, { to: deviceId, sdp: offer });
         addLog("✅ Offer dikirim ke child device", "info");
@@ -148,10 +82,42 @@ export function useWebRTC({ socket, deviceId, addLog }) {
         addLog(`❌ Gagal create offer: ${err.message}`, "error");
         isCallingRef.current = false;
       }
-    };
+    },
+    [socket, deviceId, addLog]
+  );
 
-    // --- PERBAIKAN FINAL: handleAnswer dengan Promise yang benar ---
-    const handleAnswer = async (data) => {
+  const handleRemoteOffer = useCallback(
+    async (data) => {
+      if (!pcRef.current) return;
+
+      addLog("📩 Menerima offer baru dari child (renegotiation)", "info");
+
+      try {
+        // Set remote description dengan offer baru dari anak
+        const offerDesc = new RTCSessionDescription(data.sdp);
+        await pcRef.current.setRemoteDescription(offerDesc);
+        addLog("✅ Remote description (offer baru) berhasil diset", "info");
+
+        // Buat jawaban (answer) untuk offer baru tersebut
+        const answer = await pcRef.current.createAnswer();
+        await pcRef.current.setLocalDescription(answer);
+        addLog("📄 Jawaban (answer) untuk offer baru dibuat", "info");
+
+        // Kirim jawaban kembali ke anak
+        socket.current.emit(SOCKET_EVENTS.ANSWER, {
+          to: data.from, // Kirim ke socket ID anak yang mengirim offer
+          sdp: answer.sdp
+        });
+        addLog("📤 Jawaban (answer) dikirim ke child", "info");
+      } catch (err) {
+        addLog(`❌ Gagal memproses offer baru: ${err.message}`, "error");
+      }
+    },
+    [socket, addLog]
+  );
+
+  const handleAnswer = useCallback(
+    async (data) => {
       if (!pcRef.current) return;
 
       if (!data || !data.sdp) {
@@ -232,10 +198,12 @@ export function useWebRTC({ socket, deviceId, addLog }) {
         addLog(`❌ Error umum saat memproses answer: ${err.message}`, "error");
         isCallingRef.current = false;
       }
-    };
+    },
+    [addLog]
+  );
 
-    // --- PERBAIKAN FINAL: handleRemoteIce yang lebih tangguh ---
-    const handleRemoteIce = async (data) => {
+  const handleRemoteIce = useCallback(
+    async (data) => {
       // Log data mentah yang diterima untuk debugging
       addLog(
         `DEBUG: Menerima data ICE mentah: ${JSON.stringify(data)}`,
@@ -251,48 +219,149 @@ export function useWebRTC({ socket, deviceId, addLog }) {
       const candidateData = data.candidate;
 
       if (!remoteDescriptionSetRef.current) {
-        pendingCandidatesRef.current.push(candidateData);
-        addLog("🧊 Kandidat ditunda sampai remoteDescription siap", "ice");
-      } else {
-        try {
-          // Log kandidat yang akan ditambahkan
-          addLog(
-            `DEBUG: Menerapkan ICE candidate: ${candidateData.candidate}`,
-            "ice"
-          );
-
-          // Buat RTCIceCandidate dari objek kandidat
-          const candidate = new RTCIceCandidate(candidateData);
-          await pcRef.current.addIceCandidate(candidate);
-
-          addLog("🧊 Remote ICE candidate diterapkan", "success");
-        } catch (err) {
-          // Tambahkan error detail untuk debugging
-          addLog(
-            `❌ Gagal menambahkan ICE candidate: ${err.toString()}`,
-            "error"
-          );
-          addLog(`Error Detail: ${err.name} - ${err.message}`, "error");
+        if (
+          !pendingCandidatesRef.current.some(
+            (e) => e.candidate === candidateData.candidate
+          )
+        ) {
+          pendingCandidatesRef.current.push(candidateData);
+          addLog("🧊 Kandidat ditunda sampai remoteDescription siap", "ice");
         }
+        return;
+      }
+
+      try {
+        // Log kandidat yang akan ditambahkan
+        addLog(
+          `DEBUG: Menerapkan ICE candidate: ${candidateData.candidate}`,
+          "ice"
+        );
+
+        // Buat RTCIceCandidate dari objek kandidat
+        const candidate = new RTCIceCandidate(candidateData);
+        await pcRef.current.addIceCandidate(candidate);
+
+        addLog("🧊 Remote ICE candidate diterapkan", "success");
+      } catch (err) {
+        // Tambahkan error detail untuk debugging
+        addLog(
+          `❌ Gagal menambahkan ICE candidate: ${err.toString()}`,
+          "error"
+        );
+        addLog(`Error Detail: ${err.name} - ${err.message}`, "error");
+      }
+    },
+    [addLog]
+  );
+
+  // --- Main Effect Hook ---
+  useEffect(() => {
+    if (!socket?.current || !deviceId) {
+      addLog("⚠️ Socket atau deviceId tidak tersedia. Menunggu...", "warning");
+      return;
+    }
+
+    // Prevent double initialization
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+    addLog("🔧 Menginisialisasi WebRTC di Parent...", "info");
+
+    // --- Setup RTCPeerConnection ---
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:192.168.1.254:3478" },
+        {
+          urls: "turn:192.168.1.254:3478",
+          username: "webrtc",
+          credential: "webrtc123"
+        }
+      ]
+    });
+    pcRef.current = pc;
+    addLog("✅ RTCPeerConnection dibuat", "info");
+
+    // --- Event Handlers untuk PeerConnection ---
+    pc.ontrack = (event) => {
+      addLog("📡 onTrack event dipanggil", "info");
+      if (videoRef.current && event.streams[0]) {
+        videoRef.current.srcObject = event.streams[0];
+        addLog("📹 Video stream attached ke video element", "success");
       }
     };
 
-    // --- Daftar socket listener ---
-    socket.current.off(SOCKET_EVENTS.DEVICE_FOUND);
-    socket.current.off(SOCKET_EVENTS.ANSWER);
-    socket.current.off(SOCKET_EVENTS.ICE_CANDIDATE);
+    pc.onicecandidate = (event) => {
+      if (event.candidate && socket.current?.connected) {
+        addLog(`🧊 ICE candidate dibuat: ${event.candidate.candidate}`, "ice");
 
-    socket.current.on(SOCKET_EVENTS.DEVICE_FOUND, handleDeviceFound);
-    socket.current.on(SOCKET_EVENTS.ANSWER, handleAnswer);
-    socket.current.on(SOCKET_EVENTS.ICE_CANDIDATE, handleRemoteIce);
+        // --- PERBAIKAN: Bungkus candidate dalam objek ---
+        const payload = {
+          to: deviceId, // deviceId adalah "4"
+          candidate: {
+            candidate: event.candidate.candidate,
+            sdpMid: event.candidate.sdpMid,
+            sdpMLineIndex: event.candidate.sdpMLineIndex
+          }
+        };
+
+        socket.current.emit(SOCKET_EVENTS.ICE_CANDIDATE, payload);
+        addLog(`🧊 ICE candidate dikirim ke ${deviceId}`, "ice");
+      } else if (!event.candidate) {
+        addLog("🧊 ICE gathering selesai", "ice");
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log("ICE STATE CHANGED TO:", pc.iceConnectionState); // Tambah ini
+      addLog(`🔌 ICE connection state: ${pc.iceConnectionState}`, "info");
+      if (["connected", "completed"].includes(pc.iceConnectionState)) {
+        addLog("✅ Koneksi WebRTC berhasil!", "success");
+      } else if (
+        ["failed", "disconnected", "closed"].includes(pc.iceConnectionState)
+      ) {
+        addLog("❌ Koneksi WebRTC gagal atau terputus", "error");
+        isCallingRef.current = false;
+      }
+    };
+
+    // --- Pendaftaran Socket Listener ---
+    // Hapus listener lama sebelum menambahkan yang baru untuk mencegah duplikasi
+    const listenersToCleanup = cleanupRef.current || [];
+    listenersToCleanup.forEach(({ event, handler }) => {
+      socket.current.off(event, handler);
+    });
+
+    // Daftarkan listener baru dan simpan referensinya untuk cleanup
+    const newListeners = [
+      { event: SOCKET_EVENTS.DEVICE_FOUND, handler: handleDeviceFound },
+      { event: SOCKET_EVENTS.OFFER, handler: handleRemoteOffer }, // Tambahkan handler untuk offer dari anak
+      { event: SOCKET_EVENTS.ANSWER, handler: handleAnswer },
+      { event: SOCKET_EVENTS.ICE_CANDIDATE, handler: handleRemoteIce }
+    ];
+    newListeners.forEach(({ event, handler }) => {
+      socket.current.on(event, handler);
+    });
+    cleanupRef.current = newListeners;
+
     addLog("✅ Socket event handlers didaftarkan", "info");
 
     // --- Mulai watch device ---
     socket.current.emit(SOCKET_EVENTS.WATCH_DEVICE, deviceId);
     addLog(`📡 Permintaan watch-device dikirim ke ${deviceId}`, "info");
 
-    return cleanup;
-  }, [socket, deviceId, addLog, cleanup]);
+    // Fungsi cleanup akan dijalankan saat komponen tidak lagi digunakan
+    return () => {
+      cleanup();
+    };
+  }, [
+    socket,
+    deviceId,
+    addLog,
+    cleanup,
+    handleDeviceFound,
+    handleRemoteOffer,
+    handleAnswer,
+    handleRemoteIce
+  ]); // Tambahkan semua handler ke dependency
 
   return videoRef;
 }
