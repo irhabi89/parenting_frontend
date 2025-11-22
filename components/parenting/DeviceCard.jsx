@@ -10,10 +10,6 @@ export default function DeviceCard({
   onSelectDevice,
   isActive
 }) {
-  // Tambahkan pemeriksaan defensif untuk properti 'device' dan 'device.status'
-  // Jika 'device' null/undefined, kita bisa mengembalikan null atau placeholder,
-  // atau setidaknya memastikan properti tidak diakses.
-
   if (!device) {
     return (
       <div className="p-4 mb-3 bg-red-100 rounded-xl shadow-md border border-red-500 text-red-700">

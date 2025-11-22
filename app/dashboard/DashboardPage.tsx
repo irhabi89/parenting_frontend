@@ -13,6 +13,9 @@ import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import StatCard from "../../components/common/StatCard";
 import ConsolePanel from "../../components/parenting/ConsolePanel";
+import { useRouter } from "next/navigation";
+import Cookies from "js-cookie";
+//logout
 
 // Load MapView only on client (no SSR)
 const MapView = dynamic(() => import("@/components/parenting/MapView"), {
@@ -45,6 +48,7 @@ const VIEW_TYPES = { MAP: "map", CAMERA: "camera" } as const;
 // DashboardPage Component
 // -----------------------------
 export default function DashboardPage() {
+  const router = useRouter(); // ✅ WAJIB ADA
   const authContext = useContext(AuthContext);
   if (!authContext) throw new Error("AuthContext is not provided!");
   const { user } = authContext;
@@ -98,6 +102,7 @@ export default function DashboardPage() {
       setIsSwitchingCamera(false);
     }, 1000);
   }, [selectedDevice, socket, addLog]);
+
   // -----------------------------
   // Fetch Device Location
   // -----------------------------
@@ -229,6 +234,21 @@ export default function DashboardPage() {
   // -----------------------------
   // Final Render
   // -----------------------------
+  const { logout } = authContext;
+  // logout
+  const handleLogout = useCallback(() => {
+    // Hapus token dari localStorage
+    localStorage.removeItem("token");
+    Cookies.remove("token");
+    // Bersihkan context
+    if (authContext?.setUser) {
+      authContext.setUser(null);
+    }
+
+    // redirect ke login
+    router.push("/login");
+  }, [router, authContext]);
+
   return (
     <div className="container mx-auto p-4 bg-gray-100 min-h-screen">
       <header className="mb-6 pb-4 border-b border-indigo-300">
@@ -238,6 +258,12 @@ export default function DashboardPage() {
         <p className="text-indigo-600 mt-1">
           Selamat datang, {user?.username || "Orang Tua"}.
         </p>
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 bg-red-600 text-white rounded-lg shadow hover:bg-red-700 transition"
+        >
+          🔒 Logout
+        </button>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

@@ -269,11 +269,17 @@ export function useWebRTC({ socket, deviceId, addLog }) {
     // --- Setup RTCPeerConnection ---
     const pc = new RTCPeerConnection({
       iceServers: [
-        { urls: "stun:192.168.1.254:3478" },
+        { urls: "stun:stun.l.google.com:19302" },
         {
-          urls: "turn:192.168.1.254:3478",
+          urls: "turn:103.119.50.180:3478",
+          // urls: "turn:192.168.1.254:3478",
           username: "webrtc",
           credential: "webrtc123"
+          // urls: "turn:turn.cloudflare.com:3478?transport=udp",
+          // username:
+          //   "g03c8e9586bec06eecadba4f165abe9b545e1f16b9226eb7464cbe20420d51b9",
+          // credential:
+          //   "0835aa3c66ee0b400e0f49fb3a4f4db47995013e0bf096f7cab3f8eba600692e"
         }
       ]
     });

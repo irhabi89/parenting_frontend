@@ -9,7 +9,7 @@ export const api = axios.create({
   }
 });
 
-// HANYA dipanggil dari komponen client
+// Untuk set header default
 export const setAuthToken = (token) => {
   if (token) {
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -18,9 +18,17 @@ export const setAuthToken = (token) => {
   }
 };
 
-// ❗❗❗ HAPUS BAGIAN INI ❗❗❗
-// const token = localStorage.getItem("token");
-// if (token) setAuthToken(token);
+// Interceptor WAJIB
+api.interceptors.request.use((config) => {
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
+});
 
 // ==============================
 // DEVICE SERVICE
@@ -43,44 +51,6 @@ export const locationService = {
 
   getLatestDeviceLocation: async (deviceId) => {
     const response = await api.get(`/location/${deviceId}/latest`);
-    return response.data;
-  }
-};
-
-// ==============================
-// AUTH SERVICE
-// ==============================
-export const authService = {
-  login: async (email, password) => {
-    const response = await api.post("/auth/login", { email, password });
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("token", response.data.token);
-    }
-
-    setAuthToken(response.data.token);
-
-    return response.data;
-  },
-
-  register: async (username, email, password) => {
-    const response = await api.post("/auth/register", {
-      username,
-      email,
-      password
-    });
-    return response.data;
-  },
-
-  logout: () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("token");
-    }
-    setAuthToken(null);
-  },
-
-  getMe: async () => {
-    const response = await api.get("/auth/me");
     return response.data;
   }
 };
