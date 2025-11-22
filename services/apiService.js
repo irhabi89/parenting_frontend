@@ -30,6 +30,8 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// ==============================// ==============================// ==============================
+
 // ==============================
 // DEVICE SERVICE
 // ==============================
@@ -51,6 +53,56 @@ export const locationService = {
 
   getLatestDeviceLocation: async (deviceId) => {
     const response = await api.get(`/location/${deviceId}/latest`);
+    return response.data;
+  },
+
+  getJmlLokasiAll: async () => {
+    const response = await api.get("/location/today-count");
+    return response.data;
+  },
+
+  getJmlLokasiDevice: async (deviceId) => {
+    const response = await api.get(`/location/${deviceId}/today-count`);
+    return response.data;
+  }
+};
+
+// ==============================
+// APPLICATION SERVICE
+// ==============================
+export const applicationService = {
+  getApplications: async (deviceId) => {
+    const response = await api.get(`/apps/${deviceId}`);
+    return response.data;
+  }
+};
+// ==============================
+// ACTIVITY SERVICE
+// ==============================
+
+export const activityService = {
+  getActivityDevice: async (deviceId) => {
+    const response = await api.get(`/activity/${deviceId}`);
+    return response.data;
+  },
+
+  getActivities: async () => {
+    const response = await api.get("/activity");
+    return response.data;
+  }
+};
+// ==============================
+// NOTIFIKASI SERVICE
+// ==============================
+
+export const notificationService = {
+  getNotifications: async () => {
+    const response = await api.get("/notif");
+    return response.data;
+  },
+
+  getNotificationsDevice: async (deviceId) => {
+    const response = await api.get(`/notif/${deviceId}`);
     return response.data;
   }
 };

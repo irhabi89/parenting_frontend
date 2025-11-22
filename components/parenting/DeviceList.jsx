@@ -7,6 +7,10 @@ export default function DeviceList({
   devices,
   onViewMap,
   onViewCamera,
+  onViewRealtime,
+  onViewNotifications,
+  onViewActivity,
+  onViewApplication,
   selectedDeviceId,
   onSelectDevice
 }) {
@@ -21,6 +25,10 @@ export default function DeviceList({
           // Teruskan handler untuk View dan Camera
           onViewMap={onViewMap}
           onViewCamera={onViewCamera}
+          onViewRealtime={onViewRealtime}
+          onViewActivity={onViewActivity}
+          onViewNotifications={onViewNotifications}
+          onViewApplication={onViewApplication}
           // Teruskan handler untuk memilih Card (untuk Map View)
           onSelectDevice={onSelectDevice}
         />

@@ -1,19 +1,30 @@
 "use client";
 
-import { MapPinIcon, CameraIcon } from "@heroicons/react/24/outline";
+import {
+  MapPinIcon,
+  CameraIcon,
+  ClockIcon,
+  BellIcon,
+  ChartBarIcon,
+  Squares2X2Icon
+} from "@heroicons/react/24/outline";
 
 // Tambahkan onSelectDevice dan isActive sebagai prop
 export default function DeviceCard({
   device,
   onViewMap,
   onViewCamera,
+  onViewRealtime,
+  onViewNotifications,
+  onViewActivity,
+  onViewApplication,
   onSelectDevice,
   isActive
 }) {
   if (!device) {
     return (
       <div className="p-4 mb-3 bg-red-100 rounded-xl shadow-md border border-red-500 text-red-700">
-        Error: Data perangkat tidak tersedia.
+        perangkat tidak tersedia.
       </div>
     );
   }
@@ -72,14 +83,14 @@ export default function DeviceCard({
       </p>
 
       {/* Baris 2: Tombol Aksi (Gunakan stopPropagation agar klik tombol tidak memicu onSelectDevice) */}
-      <div className="flex gap-2 w-full mt-1">
+      <div className="grid grid-cols-2 gap-2 w-full mt-1">
         {/* Tombol View Location */}
         <button
           onClick={(e) => {
             e.stopPropagation(); // Penting: Menghentikan event bubbling ke div utama
             onViewMap(device);
           }}
-          className="flex items-center justify-center flex-grow
+          className="flex items-center justify-center
                      px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm whitespace-nowrap 
                      bg-blue-600 text-white hover:bg-blue-700 transition duration-150 ease-in-out"
         >
@@ -93,12 +104,68 @@ export default function DeviceCard({
             e.stopPropagation(); // Penting: Menghentikan event bubbling ke div utama
             onViewCamera(device);
           }}
-          className="flex items-center justify-center flex-grow
+          className="flex items-center justify-center
                      px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm whitespace-nowrap
                      bg-purple-600 text-white hover:bg-purple-700 transition duration-150 ease-in-out"
         >
           <CameraIcon className="h-4 w-4 mr-1" />
           Kamera
+        </button>
+
+        {/* Tombol Realtime */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation(); // Penting: Menghentikan event bubbling ke div utama
+            onViewRealtime(device);
+          }}
+          className="flex items-center justify-center
+                     px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm whitespace-nowrap
+                     bg-green-600 text-white hover:bg-green-700 transition duration-150 ease-in-out"
+        >
+          <ClockIcon className="h-4 w-4 mr-1" />
+          Realtime
+        </button>
+
+        {/* Tombol Notifikasi */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation(); // Penting: Menghentikan event bubbling ke div utama
+            onViewNotifications(device);
+          }}
+          className="flex items-center justify-center
+                     px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm whitespace-nowrap
+                     bg-yellow-600 text-white hover:bg-yellow-700 transition duration-150 ease-in-out"
+        >
+          <BellIcon className="h-4 w-4 mr-1" />
+          Notifikasi
+        </button>
+
+        {/* Tombol Activity */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation(); // Penting: Menghentikan event bubbling ke div utama
+            onViewActivity(device);
+          }}
+          className="flex items-center justify-center
+                     px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm whitespace-nowrap
+                     bg-orange-600 text-white hover:bg-orange-700 transition duration-150 ease-in-out"
+        >
+          <ChartBarIcon className="h-4 w-4 mr-1" />
+          Activity
+        </button>
+
+        {/* Tombol Application */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation(); // Penting: Menghentikan event bubbling ke div utama
+            onViewApplication(device);
+          }}
+          className="flex items-center justify-center
+                     px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm whitespace-nowrap
+                     bg-teal-600 text-white hover:bg-teal-700 transition duration-150 ease-in-out"
+        >
+          <Squares2X2Icon className="h-4 w-4 mr-1" />
+          Application
         </button>
       </div>
     </div>
